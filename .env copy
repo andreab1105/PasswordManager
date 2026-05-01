@@ -1,0 +1,5 @@
+# Database Secrets
+MYSQL_ROOT_PASSWORD=super_secret_root_hex
+MYSQL_DATABASE=PASSWD
+MYSQL_USER=app_admin
+MYSQL_PASSWORD=secure_app_password

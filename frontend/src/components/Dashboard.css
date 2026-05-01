@@ -1,0 +1,73 @@
+/* Dashboard specific styles */
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-header h1 {
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Loading state */
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+.loading-spinner::after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  .password-card {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .password-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .modal {
+    margin: 20px;
+  }
+}
+
+.readonly-input {
+  background-color: #f0f0f0; /* Grey background */
+  color: #666;               /* Muted text color */
+  cursor: not-allowed;       /* Shows a "blocked" icon on hover */
+  border: 1px solid #ccc;
+  outline: none;             /* Removes the focus ring */
+}
+
+.readonly-input:focus {
+  border-color: #ccc;        /* Prevents color change on click */
+}
