@@ -9,8 +9,6 @@ import (
 	"strings"
 	"unicode"
 
-	// hash
-
 	"crypto/aes"    //
 	"crypto/cipher" // cifratura
 	"crypto/rand"   //
@@ -19,10 +17,10 @@ import (
 
 	// chiave di cifratura
 
-	_ "github.com/go-sql-driver/mysql" // Driver MySQL
-	// Pacchetto per leggere .env
+	_ "github.com/go-sql-driver/mysql"
+
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/bcrypt" //hash
 )
 
 func Prova() string {
@@ -43,6 +41,7 @@ func Connection() (*sql.DB, error) {
 	*/
 
 	// Costruisci la stringa di connessione (DSN) usando os.Getenv
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
 		os.Getenv("DB_USER"),
 		os.Getenv("DB_PASSWORD"),
@@ -85,18 +84,14 @@ func Hashing(password string) (string, error) {
 }
 
 func GeneraKey(password []byte, salt []byte) []byte {
-	// Parametri standard raccomandati per Argon2id
-	// time: numero di iterazioni (passate)
-	// memory: quanta RAM usare (es. 64MB)
-	// threads: quanti core CPU usare
-	// keyLen: lunghezza della chiave (32 byte = 256 bit per AES-256)
+
 	return argon2.IDKey(password, salt, 2, 64*1024, 2, 32)
 }
 
 func GeneraSalt(size int) ([]byte, error) {
 
 	salt := make([]byte, size)
-	// Legge byte casuali dal generatore sicuro del sistema operativo
+
 	_, err := io.ReadFull(rand.Reader, salt)
 	if err != nil {
 		return nil, err
@@ -145,7 +140,7 @@ func AddUser(db *sql.DB, utente string, password string) error {
 	if err1 == nil {
 		return fmt.Errorf("user already exists")
 	} else if err1 != sql.ErrNoRows {
-		// If the error is something other than "No Rows", it's a real DB error
+
 		return fmt.Errorf("database query error: %v", err1)
 	}
 
@@ -160,7 +155,7 @@ func AddUser(db *sql.DB, utente string, password string) error {
 
 	_, err3 := db.Exec(query, utente, password_hash, saltBase64)
 	if err3 != nil {
-		return fmt.Errorf("failed to insert user: %v", err3) // This will show you exactly why it failed
+		return fmt.Errorf("failed to insert user: %v", err3)
 	}
 
 	fmt.Println("utente creato correttamente!")
@@ -258,7 +253,6 @@ func AddPassword(db *sql.DB, utente string, indirizzo_url string, username strin
 	password_cifrataBase64 := base64.StdEncoding.EncodeToString(password_cifrata)
 	query := "INSERT INTO PASSWORD (utente,indirizzo_url,username,password_cifrata) VALUES (?, ?, ?, ?)"
 
-	// db.Exec prepara la query, esegue il binding dei dati ed esegue il comando
 	_, err := db.Exec(query, utente, indirizzo_url, username, password_cifrataBase64)
 	if err != nil {
 		return err
@@ -275,7 +269,7 @@ func EditPassword(db *sql.DB, id string, utente string, indirizzo_url string, us
 	}
 	password_cifrataBase64 := base64.StdEncoding.EncodeToString(password_cifrata)
 	query := "UPDATE PASSWORD SET username = ? ,password_cifrata = ? WHERE utente = ? AND id = ?"
-	// db.Exec prepara la query, esegue il binding dei dati ed esegue il comando
+
 	_, err := db.Exec(query, username, password_cifrataBase64, utente, id)
 	if err != nil {
 		return err

@@ -9,7 +9,7 @@ import (
 	"log"
 	"net/http"
 	"password_menager/database"
-	"sync" // Importa il pacchetto sync
+	"sync"
 )
 
 type SessionData struct {
@@ -42,7 +42,6 @@ type LoginRequest struct {
 func GenerateRandomID(length int) (string, error) {
 	randomID := make([]byte, length)
 
-	// Read random bytes from the operating system's CSPRNG
 	_, err := rand.Read(randomID)
 	if err != nil {
 		return "", err
@@ -52,7 +51,6 @@ func GenerateRandomID(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(randomID), nil
 }
 
-// Create a specific handler for React to check login status
 func HandleCheckAuth(w http.ResponseWriter, r *http.Request) {
 	// 1. MUST NOT BE "*" when using credentials
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost")
@@ -67,13 +65,13 @@ func HandleCheckAuth(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized) // This is what you see in the screenshot
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	sessionID := cookie.Value
 
-	sessionMu.RLock() // Blocco ottimizzato per sola lettura
+	sessionMu.RLock()
 	_, exists := userSessions[sessionID]
 	sessionMu.RUnlock()
 
@@ -115,7 +113,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 			return
 		}
 
-		sessionMu.Lock() // Blocca tutto (scrittura)
+		sessionMu.Lock()
 
 		// 3. Store the key in memory
 		userSessions[sessionID] = SessionData{
@@ -194,7 +192,7 @@ func HandleAddPassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	sessionID := cookie.Value
 
-	sessionMu.RLock() // Blocco ottimizzato per sola lettura
+	sessionMu.RLock()
 	userKey, exists := userSessions[sessionID]
 	sessionMu.RUnlock()
 
@@ -242,7 +240,7 @@ func HandleEditPassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	sessionID := cookie.Value
 
-	sessionMu.RLock() // Blocco ottimizzato per sola lettura
+	sessionMu.RLock()
 	userKey, exists := userSessions[sessionID]
 	sessionMu.RUnlock()
 
@@ -300,7 +298,7 @@ func HandleRemovePassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	sessionID := cookie.Value
 
-	sessionMu.RLock() // Blocco ottimizzato per sola lettura
+	sessionMu.RLock()
 	userKey, exists := userSessions[sessionID]
 	sessionMu.RUnlock()
 
@@ -348,7 +346,7 @@ func HandleGetPassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	sessionID := cookie.Value
 
-	sessionMu.RLock() // Blocco ottimizzato per sola lettura
+	sessionMu.RLock()
 	userKey, exists := userSessions[sessionID]
 	sessionMu.RUnlock()
 

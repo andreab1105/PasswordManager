@@ -137,7 +137,7 @@ function Dashboard({ onLogout }) {
     setFormData({ url: '', username: '', password: '' })
   }
 
-  // UPDATED: Now accepts the password object to populate the form
+
   const openEdit = (password) => {
     setEditingId(password.id);
     setaggiungiPassword('Update')
@@ -145,7 +145,7 @@ function Dashboard({ onLogout }) {
     setFormData({ 
       url: password.url, 
       username: password.username, 
-      password: '' // Keep password empty for security or pre-fill if your API provides it
+      password: '' // Keep password empty for security 
     })
     setShowEdit(true)
   }
@@ -291,7 +291,7 @@ function Dashboard({ onLogout }) {
         <div className="modal-overlay" onClick={closeEdit}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Edit Password</h2>
-            {/* FIXED: Form now calls handleEdit */}
+           
             <form onSubmit={handleEdit}>
               <div className="form-group">
                 <label htmlFor="edit-url">Website / URL</label>
@@ -325,7 +325,7 @@ function Dashboard({ onLogout }) {
                 />
               </div>
               <div className="modal-actions">
-                {/* FIXED: Cancel now calls closeEdit */}
+                
                 <button type="button" className="btn cancel-btn" onClick={closeEdit}>
                   Cancel
                 </button>
