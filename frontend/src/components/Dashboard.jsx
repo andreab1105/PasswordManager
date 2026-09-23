@@ -11,6 +11,9 @@ function Dashboard({ onLogout }) {
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null);
+  const [showAddPassword, setShowAddPassword] = useState(false)
+  const [showEditPassword, setShowEditPassword] = useState(false)
+  const [revealedPasswords, setRevealedPasswords] = useState({})
 
   const [formData, setFormData] = useState({
     url: '',
@@ -129,11 +132,13 @@ function Dashboard({ onLogout }) {
   const openModal = () => {
     setaggiungiPassword(null)
     setFormData({ url: '', username: '', password: '' })
+    setShowAddPassword(false)
     setShowModal(true)
   }
 
   const closeModal = () => {
     setShowModal(false)
+    setShowAddPassword(false)
     setFormData({ url: '', username: '', password: '' })
   }
 
@@ -141,6 +146,7 @@ function Dashboard({ onLogout }) {
   const openEdit = (password) => {
     setEditingId(password.id);
     setaggiungiPassword('Update')
+    setShowEditPassword(false)
     
     setFormData({ 
       url: password.url, 
@@ -152,8 +158,57 @@ function Dashboard({ onLogout }) {
 
   const closeEdit = () => {
     setShowEdit(false)
+    setShowEditPassword(false)
     setEditingId(null)
     setFormData({ url: '', username: '', password: '' })
+  }
+
+  const togglePasswordVisibility = (id) => {
+    setRevealedPasswords(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }))
+  }
+
+  const generateSecurePassword = (length = 16) => {
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz'
+    const numbers = '0123456789'
+    const symbols = '!@#$%?'
+
+    const requiredChars = [
+      uppercase[Math.floor(Math.random() * uppercase.length)],
+      lowercase[Math.floor(Math.random() * lowercase.length)],
+      numbers[Math.floor(Math.random() * numbers.length)],
+      symbols[Math.floor(Math.random() * symbols.length)]
+    ]
+
+    const allChars = uppercase + lowercase + numbers + symbols
+    const passwordChars = [...requiredChars]
+
+    while (passwordChars.length < length) {
+      passwordChars.push(allChars[Math.floor(Math.random() * allChars.length)])
+    }
+
+    for (let i = passwordChars.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[passwordChars[i], passwordChars[j]] = [passwordChars[j], passwordChars[i]]
+    }
+
+    return passwordChars.join('')
+  }
+
+  const handleGeneratePassword = (target) => {
+    const generatedPassword = generateSecurePassword(16)
+
+    if (target === 'add') {
+      setFormData(prev => ({ ...prev, password: generatedPassword }))
+      setShowAddPassword(true)
+      return
+    }
+
+    setFormData(prev => ({ ...prev, password: generatedPassword }))
+    setShowEditPassword(true)
   }
 
   const showToast = (message, type) => {
@@ -205,7 +260,17 @@ function Dashboard({ onLogout }) {
                 <div className="password-info">
                   <h3>{password.url}</h3>
                   <p><strong>Username:</strong> {password.username}</p>
-                  <p><strong>Password:</strong> ••••••••</p>
+                  <div className="password-field">
+                    <strong>Password:</strong>
+                    <span>{revealedPasswords[password.id] ? password.password : '••••••••'}</span>
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => togglePasswordVisibility(password.id)}
+                    >
+                      {revealedPasswords[password.id] ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
                 <div className="password-actions">
                   <button 
@@ -264,14 +329,33 @@ function Dashboard({ onLogout }) {
               </div>
               <div className="form-group">
                 <label htmlFor="password">Password</label>
-                <input
-                  type="password"
-                  id="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                  placeholder="Enter password"
-                />
+                <div className="password-input-wrapper">
+                  <input
+                    type={showAddPassword ? 'text' : 'password'}
+                    id="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required
+                    placeholder="Enter password"
+                  />
+                  <div className="password-input-actions">
+                    <button
+                      type="button"
+                      className="visibility-btn"
+                      onClick={() => setShowAddPassword(!showAddPassword)}
+                      aria-label={showAddPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showAddPassword ? '🙈' : '👁️'}
+                    </button>
+                    <button
+                      type="button"
+                      className="generate-password-btn"
+                      onClick={() => handleGeneratePassword('add')}
+                    >
+                      Random Password
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn cancel-btn" onClick={closeModal}>
@@ -315,14 +399,33 @@ function Dashboard({ onLogout }) {
               </div>
               <div className="form-group">
                 <label htmlFor="edit-password">New Password</label>
-                <input
-                  type="password"
-                  id="edit-password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                  placeholder="Enter new password"
-                />
+                <div className="password-input-wrapper">
+                  <input
+                    type={showEditPassword ? 'text' : 'password'}
+                    id="edit-password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required
+                    placeholder="Enter new password"
+                  />
+                  <div className="password-input-actions">
+                    <button
+                      type="button"
+                      className="visibility-btn"
+                      onClick={() => setShowEditPassword(!showEditPassword)}
+                      aria-label={showEditPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showEditPassword ? '🙈' : '👁️'}
+                    </button>
+                    <button
+                      type="button"
+                      className="generate-password-btn"
+                      onClick={() => handleGeneratePassword('edit')}
+                    >
+                      Random Password
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="modal-actions">
                 

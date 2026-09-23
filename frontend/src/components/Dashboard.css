@@ -13,6 +13,63 @@
   gap: 10px;
 }
 
+.password-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.password-field span {
+  word-break: break-all;
+}
+
+.password-toggle-btn,
+.visibility-btn,
+.generate-password-btn {
+  border: 1px solid #d9d9d9;
+  background: #f4f4f4;
+  color: #333;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.password-toggle-btn:hover,
+.visibility-btn:hover,
+.generate-password-btn:hover {
+  background: #ebebeb;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 110px;
+}
+
+.password-input-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.visibility-btn,
+.generate-password-btn {
+  padding: 5px 8px;
+  min-height: 32px;
+}
+
 /* Loading state */
 .loading-spinner {
   display: flex;
