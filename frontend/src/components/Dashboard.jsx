@@ -2,8 +2,56 @@ import { useState, useEffect } from 'react'
 import './Dashboard.css'
 import Cookies from 'js-cookie';
 
+const generateTotpCode = async (secret, timestamp) => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  const normalizedSecret = secret.toUpperCase().replace(/[\s=-]/g, '')
+  let buffer = 0
+  let bitsLeft = 0
+  const secretBytes = []
+
+  for (const character of normalizedSecret) {
+    const value = alphabet.indexOf(character)
+    if (value === -1) {
+      throw new Error('Invalid Base32 OTP secret')
+    }
+
+    buffer = (buffer << 5) | value
+    bitsLeft += 5
+    if (bitsLeft >= 8) {
+      bitsLeft -= 8
+      secretBytes.push((buffer >> bitsLeft) & 0xff)
+      buffer &= (1 << bitsLeft) - 1
+    }
+  }
+
+  if (secretBytes.length === 0) {
+    throw new Error('Invalid Base32 OTP secret')
+  }
+
+  const counter = BigInt(Math.floor(timestamp / 30000))
+  const counterBytes = new ArrayBuffer(8)
+  new DataView(counterBytes).setBigUint64(0, counter)
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new Uint8Array(secretBytes),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign']
+  )
+  const hash = new Uint8Array(await crypto.subtle.sign('HMAC', key, counterBytes))
+  const offset = hash[hash.length - 1] & 0x0f
+  const binary =
+    ((hash[offset] & 0x7f) << 24) |
+    ((hash[offset + 1] & 0xff) << 16) |
+    ((hash[offset + 2] & 0xff) << 8) |
+    (hash[offset + 3] & 0xff)
+
+  return String(binary % 1000000).padStart(6, '0')
+}
+
 function Dashboard({ onLogout }) {
   const [passwords, setPasswords] = useState([])
+  const [otpCodes, setOtpCodes] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
@@ -13,17 +61,45 @@ function Dashboard({ onLogout }) {
   const [editingId, setEditingId] = useState(null);
   const [showAddPassword, setShowAddPassword] = useState(false)
   const [showEditPassword, setShowEditPassword] = useState(false)
+  const [showAddOtp, setShowAddOtp] = useState(false)
+  const [showEditOtp, setShowEditOtp] = useState(false)
   const [revealedPasswords, setRevealedPasswords] = useState({})
 
   const [formData, setFormData] = useState({
     url: '',
     username: '',
-    password: ''
+    password: '',
+    otp: ''
   })
 
   useEffect(() => {
     fetchPasswords()
   }, [])
+
+  useEffect(() => {
+    const updateOtpCodes = async () => {
+      const entries = await Promise.all(
+        passwords
+          .filter(password => password.otpSecret)
+          .map(async password => {
+            try {
+              const now = Date.now()
+              return [password.id, {
+                code: await generateTotpCode(password.otpSecret, now),
+                secondsRemaining: 30 - (Math.floor(now / 1000) % 30)
+              }]
+            } catch {
+              return [password.id, { code: 'OTP unavailable', secondsRemaining: 0 }]
+            }
+          })
+      )
+      setOtpCodes(Object.fromEntries(entries))
+    }
+
+    updateOtpCodes()
+    const intervalId = setInterval(updateOtpCodes, 1000)
+    return () => clearInterval(intervalId)
+  }, [passwords])
 
   const getAuthHeaders = () => {
     const token = Cookies.get('session_token')
@@ -131,15 +207,17 @@ function Dashboard({ onLogout }) {
 
   const openModal = () => {
     setaggiungiPassword(null)
-    setFormData({ url: '', username: '', password: '' })
+    setFormData({ url: '', username: '', password: '', otp: '' })
     setShowAddPassword(false)
+    setShowAddOtp(false)
     setShowModal(true)
   }
 
   const closeModal = () => {
     setShowModal(false)
     setShowAddPassword(false)
-    setFormData({ url: '', username: '', password: '' })
+    setShowAddOtp(false)
+    setFormData({ url: '', username: '', password: '', otp: '' })
   }
 
 
@@ -147,11 +225,13 @@ function Dashboard({ onLogout }) {
     setEditingId(password.id);
     setaggiungiPassword('Update')
     setShowEditPassword(false)
+    setShowEditOtp(false)
     
     setFormData({ 
       url: password.url, 
       username: password.username, 
-      password: '' // Keep password empty for security 
+      password: '', // Keep password empty for security
+      otp: ''
     })
     setShowEdit(true)
   }
@@ -159,8 +239,9 @@ function Dashboard({ onLogout }) {
   const closeEdit = () => {
     setShowEdit(false)
     setShowEditPassword(false)
+    setShowEditOtp(false)
     setEditingId(null)
-    setFormData({ url: '', username: '', password: '' })
+    setFormData({ url: '', username: '', password: '', otp: '' })
   }
 
   const togglePasswordVisibility = (id) => {
@@ -255,48 +336,79 @@ function Dashboard({ onLogout }) {
           </div>
         ) : (
           <div className="password-list">
-            {filteredPasswords.map((password) => (
-              <div key={password.id} className="password-card">
-                <div className="password-info">
-                  <h3>{password.url}</h3>
-                  <p><strong>Username:</strong> {password.username}</p>
-                  <div className="password-field">
-                    <strong>Password:</strong>
-                    <span>{revealedPasswords[password.id] ? password.password : '••••••••'}</span>
-                    <button
-                      type="button"
-                      className="password-toggle-btn"
-                      onClick={() => togglePasswordVisibility(password.id)}
+            {filteredPasswords.map((password) => {
+              const isPowned = String(password.powned) === '1'
+              return(
+              <div 
+                  key={password.id} 
+                  className={`password-card ${isPowned ? 'powned' : ''}`}>
+
+                  <div className="password-info">
+                    <h3>
+                      {password.url}    {isPowned && <span className="powned-badge">🚨 VIOLATA</span>}
+                    </h3>
+                    <p><strong>Username:</strong> {password.username}</p>
+                    <div className="password-field">
+                      <strong>Password:</strong>
+                      <span>{revealedPasswords[password.id] ? password.password : '••••••••'}</span>
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => togglePasswordVisibility(password.id)}
+                      >
+                        {revealedPasswords[password.id] ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                    {password.otpSecret && (
+                      <div className="otp-field">
+                        <strong>OTP:</strong>
+                        <span className="otp-code">{otpCodes[password.id]?.code || '------'}</span>
+                        <span className="otp-countdown">
+                          {otpCodes[password.id]?.secondsRemaining ?? 30}s
+                        </span>
+                        <button
+                          type="button"
+                          className="action-btn copy-btn"
+                          onClick={() => {
+                            const code = otpCodes[password.id]?.code
+                            if (/^\d{6}$/.test(code || '')) {
+                              handleCopy(code)
+                            }
+                          }}
+                          disabled={!/^\d{6}$/.test(otpCodes[password.id]?.code || '')}
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="password-actions">
+                    <button 
+                      className="action-btn copy-btn" 
+                      onClick={() => handleCopy(password.password)}
                     >
-                      {revealedPasswords[password.id] ? '🙈' : '👁️'}
+                      Copy
+                    </button>
+                    <button 
+                      className="action-btn modify-btn"
+                      onClick={() => openEdit(password)}
+                    >
+                      Edit
+                    </button>
+
+                    <button 
+                      className="action-btn delete-btn"
+                      onClick={() => handleDelete(password.id)}
+                    >
+                      Delete
                     </button>
                   </div>
                 </div>
-                <div className="password-actions">
-                  <button 
-                    className="action-btn copy-btn" 
-                    onClick={() => handleCopy(password.password)}
-                  >
-                    Copy
-                  </button>
-                  <button 
-                    className="action-btn modify-btn"
-                    onClick={() => openEdit(password)}
-                  >
-                    Edit
-                  </button>
-
-                  <button 
-                    className="action-btn delete-btn"
-                    onClick={() => handleDelete(password.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              )
+            })}
+            </div>
+        )
+      }
       </main>
 
       {/* Add Modal */}
@@ -357,6 +469,28 @@ function Dashboard({ onLogout }) {
                   </div>
                 </div>
               </div>
+              <div className="form-group">
+                <button
+                  type="button"
+                  className="btn btn-secondary otp-toggle-btn"
+                  onClick={() => setShowAddOtp(!showAddOtp)}
+                >
+                  {showAddOtp ? 'Hide OTP' : 'Add OTP'}
+                </button>
+                {showAddOtp && (
+                  <>
+                    <label htmlFor="otp">OTP secret (Base32)</label>
+                    <input
+                      type="password"
+                      id="otp"
+                      value={formData.otp}
+                      onChange={(e) => setFormData({ ...formData, otp: e.target.value })}
+                      placeholder="Enter OTP secret"
+                      autoComplete="off"
+                    />
+                  </>
+                )}
+              </div>
               <div className="modal-actions">
                 <button type="button" className="btn cancel-btn" onClick={closeModal}>
                   Cancel
@@ -398,15 +532,14 @@ function Dashboard({ onLogout }) {
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="edit-password">New Password</label>
+                <label htmlFor="edit-password">New Password (optional)</label>
                 <div className="password-input-wrapper">
                   <input
                     type={showEditPassword ? 'text' : 'password'}
                     id="edit-password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    required
-                    placeholder="Enter new password"
+                    placeholder="Leave empty to keep the current password"
                   />
                   <div className="password-input-actions">
                     <button
@@ -426,6 +559,28 @@ function Dashboard({ onLogout }) {
                     </button>
                   </div>
                 </div>
+              </div>
+              <div className="form-group">
+                <button
+                  type="button"
+                  className="btn btn-secondary otp-toggle-btn"
+                  onClick={() => setShowEditOtp(!showEditOtp)}
+                >
+                  {showEditOtp ? 'Hide OTP' : 'Add OTP'}
+                </button>
+                {showEditOtp && (
+                  <>
+                    <label htmlFor="edit-otp">OTP secret (Base32)</label>
+                    <input
+                      type="password"
+                      id="edit-otp"
+                      value={formData.otp}
+                      onChange={(e) => setFormData({ ...formData, otp: e.target.value })}
+                      placeholder="Enter OTP secret to add or replace"
+                      autoComplete="off"
+                    />
+                  </>
+                )}
               </div>
               <div className="modal-actions">
                 

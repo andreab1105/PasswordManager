@@ -1,16 +1,30 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
+	"crypto/sha1"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"password_menager/database"
+	"strings"
 	"sync"
+	"time"
 )
+
+func getLocalDay() string {
+	loc, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		// Fallback to local system time if location load fails
+		return time.Now().Format("2")
+	}
+	return time.Now().In(loc).Format("2")
+}
 
 type SessionData struct {
 	Key      []byte
@@ -49,6 +63,66 @@ func GenerateRandomID(length int) (string, error) {
 
 	// Encode to URL-safe Base64 to ensure it can be used in cookies or headers
 	return base64.URLEncoding.EncodeToString(randomID), nil
+}
+
+func CheckPwnPasswords(passwords []map[string]string, utente string, db *sql.DB) error {
+	todayStr := getLocalDay()
+	for _, record := range passwords {
+
+		fmt.Printf("powned: %q | clock: %q | today: %q\n", record["powned"], record["clock"], todayStr)
+
+		if (record["powned"] != "1" && record["clock"] != todayStr) || record["powned"] == "" {
+
+			// trasforma in sha_1 la password e prendi i primi 5 caratteri
+			h := sha1.New()
+			h.Write([]byte(record["password"]))
+			sha1Stringa := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+			primiCinque := sha1Stringa[:5]
+			resto := sha1Stringa[5:]
+
+			url := "https://api.pwnedpasswords.com/range/" + primiCinque
+
+			resp, err := http.Get(url)
+
+			if err != nil {
+				return err
+			}
+
+			scanner := bufio.NewScanner(resp.Body)
+
+			trovato := false
+			for scanner.Scan() {
+				linea := scanner.Text()
+
+				// Separa la riga al carattere ":"
+				parti := strings.Split(linea, ":")
+				if len(parti) < 2 {
+					continue // Salta righe non valide
+				}
+
+				apiSuffisso := parti[0]
+				conteggioBreach := parti[1]
+
+				// Confronta il tuo suffisso con quello restituito dall'API
+				if apiSuffisso == resto {
+					fmt.Printf("🚨 ATTENZIONE! La password è stata violata %s volte!\n", conteggioBreach)
+					database.UpdatePowned(db, record["id"], utente, "1", todayStr)
+					trovato = true
+					break
+				}
+			}
+
+			if !trovato {
+				fmt.Println("✅ Password sicura! Nessuna corrispondenza trovata nei leak.")
+				database.UpdatePowned(db, record["id"], utente, "0", todayStr)
+
+			}
+
+			resp.Body.Close()
+		}
+
+	}
+	return nil
 }
 
 func HandleCheckAuth(w http.ResponseWriter, r *http.Request) {
@@ -205,13 +279,14 @@ func HandleAddPassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		URL      string `json:"url"`
 		Username string `json:"username"`
 		Password string `json:"password"`
+		OTP      string `json:"otp"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	err2 := database.AddPassword(db, userKey.Username, req.URL, req.Username, req.Password, userKey.Key)
+	err2 := database.AddPassword(db, userKey.Username, req.URL, req.Username, req.Password, req.OTP, userKey.Key)
 	if err2 != nil {
 		http.Error(w, "Failed to save: "+err2.Error(), http.StatusInternalServerError)
 		return
@@ -262,13 +337,14 @@ func HandleEditPassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		URL      string `json:"url"`
 		Username string `json:"username"`
 		Password string `json:"password"`
+		OTP      string `json:"otp"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	err1 := database.EditPassword(db, id, userKey.Username, req.URL, req.Username, req.Password, userKey.Key)
+	err1 := database.EditPassword(db, id, userKey.Username, req.URL, req.Username, req.Password, req.OTP, userKey.Key)
 	if err1 != nil {
 		http.Error(w, "Failed to save: "+err1.Error(), http.StatusInternalServerError)
 		return
@@ -360,6 +436,8 @@ func HandleGetPassword(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		http.Error(w, "Failed to get passwords: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	CheckPwnPasswords(passwords, userKey.Username, db)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(passwords)

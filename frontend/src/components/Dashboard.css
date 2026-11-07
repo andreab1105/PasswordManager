@@ -25,6 +25,31 @@
   word-break: break-all;
 }
 
+.otp-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.otp-code {
+  font-family: monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.otp-countdown {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.otp-field button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .password-toggle-btn,
 .visibility-btn,
 .generate-password-btn {
@@ -104,8 +129,44 @@
 
   .password-card {
     flex-direction: column;
+    align-items: stretch;
     gap: 15px;
+    background-color: #ffff;
   }
+
+  .password-info {
+    width: 100%;
+    text-align: left;
+  }
+  
+  .password-card.powned {
+    background-color: #ff2a2a;
+    color: #ffff;
+    position: relative;
+  }
+  .password-card.powned .powned-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background-color: #ffffff;
+    color: #d71717;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 4px 10px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  
+  }
+
+  .password-card.powned h3,
+  .password-card.powned p,
+  .password-card.powned strong,
+  .password-card.powned span {
+    color: #ffffff;
+  }
+
+  
+
 
   .password-actions {
     width: 100%;
@@ -117,6 +178,31 @@
   }
 }
 
+.password-card.powned {
+  background-color: #ff2a2a;
+  color: #ffff;
+  position: relative;
+}
+.password-card.powned .powned-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background-color: #ffffff;
+  color: #d71717;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+}
+
+.password-card.powned h3,
+.password-card.powned p,
+.password-card.powned strong,
+.password-card.powned span {
+    color: #ffffff;
+}
 .readonly-input {
   background-color: #f0f0f0; /* Grey background */
   color: #666;               /* Muted text color */

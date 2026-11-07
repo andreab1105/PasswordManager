@@ -16,6 +16,11 @@ CREATE TABLE PASSWORD
     indirizzo_url VARCHAR (100),
     username VARCHAR (50) ,
     password_cifrata VARCHAR (200) NOT NULL ,
+    powned INT DEFAULT 0,
+    clock INT DEFAULT 0, /*giorno dell'ultimo check powned*/
+    
+    secret_OTP_cifrato TEXT DEFAULT NULL,
+
     FOREIGN KEY (utente) REFERENCES UTENTI(nome)
 );
 

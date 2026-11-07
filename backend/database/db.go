@@ -245,15 +245,23 @@ func DecifraturaPassword(password_cifrata []byte, chiave []byte) ([]byte, error)
 	return gcm.Open(nil, nonce, encryptedData, nil)
 }
 
-func AddPassword(db *sql.DB, utente string, indirizzo_url string, username string, password string, chiave []byte) error {
+func AddPassword(db *sql.DB, utente string, indirizzo_url string, username string, password string, otp string, chiave []byte) error {
 	password_cifrata, errcifratura := CifraPassword([]byte(password), chiave)
 	if errcifratura != nil {
 		return fmt.Errorf("errore nella cifratura della password")
 	}
 	password_cifrataBase64 := base64.StdEncoding.EncodeToString(password_cifrata)
-	query := "INSERT INTO PASSWORD (utente,indirizzo_url,username,password_cifrata) VALUES (?, ?, ?, ?)"
+	otpCifratoBase64 := ""
+	if otp != "" {
+		otpCifrato, err := CifraPassword([]byte(otp), chiave)
+		if err != nil {
+			return fmt.Errorf("errore nella cifratura dell'OTP")
+		}
+		otpCifratoBase64 = base64.StdEncoding.EncodeToString(otpCifrato)
+	}
+	query := "INSERT INTO PASSWORD (utente,indirizzo_url,username,password_cifrata,secret_OTP_cifrato) VALUES (?, ?, ?, ?, NULLIF(?, ''))"
 
-	_, err := db.Exec(query, utente, indirizzo_url, username, password_cifrataBase64)
+	_, err := db.Exec(query, utente, indirizzo_url, username, password_cifrataBase64, otpCifratoBase64)
 	if err != nil {
 		return err
 	}
@@ -262,15 +270,27 @@ func AddPassword(db *sql.DB, utente string, indirizzo_url string, username strin
 	return nil
 }
 
-func EditPassword(db *sql.DB, id string, utente string, indirizzo_url string, username string, password string, chiave []byte) error {
-	password_cifrata, errcifratura := CifraPassword([]byte(password), chiave)
-	if errcifratura != nil {
-		return fmt.Errorf("errore nella cifratura della password")
+func EditPassword(db *sql.DB, id string, utente string, indirizzo_url string, username string, password string, otp string, chiave []byte) error {
+	passwordCifrataBase64 := ""
+	if password != "" {
+		passwordCifrata, err := CifraPassword([]byte(password), chiave)
+		if err != nil {
+			return fmt.Errorf("errore nella cifratura della password")
+		}
+		passwordCifrataBase64 = base64.StdEncoding.EncodeToString(passwordCifrata)
 	}
-	password_cifrataBase64 := base64.StdEncoding.EncodeToString(password_cifrata)
-	query := "UPDATE PASSWORD SET username = ? ,password_cifrata = ? WHERE utente = ? AND id = ?"
 
-	_, err := db.Exec(query, username, password_cifrataBase64, utente, id)
+	otpCifratoBase64 := ""
+	if otp != "" {
+		otpCifrato, err := CifraPassword([]byte(otp), chiave)
+		if err != nil {
+			return fmt.Errorf("errore nella cifratura dell'OTP")
+		}
+		otpCifratoBase64 = base64.StdEncoding.EncodeToString(otpCifrato)
+	}
+	query := "UPDATE PASSWORD SET username = ?, password_cifrata = COALESCE(NULLIF(?, ''), password_cifrata), secret_OTP_cifrato = COALESCE(NULLIF(?, ''), secret_OTP_cifrato), powned = 0, clock = 0 WHERE utente = ? AND id = ?"
+
+	_, err := db.Exec(query, username, passwordCifrataBase64, otpCifratoBase64, utente, id)
 	if err != nil {
 		return err
 	}
@@ -286,7 +306,7 @@ func RemovePassword(db *sql.DB, id string, utente string) error {
 }
 
 func GetAllPasswords(db *sql.DB, utente string, chiave []byte) ([]map[string]string, error) {
-	query := "SELECT id, indirizzo_url, username, password_cifrata FROM PASSWORD WHERE utente = ?"
+	query := "SELECT id, indirizzo_url, username, password_cifrata, powned, clock, secret_OTP_cifrato FROM PASSWORD WHERE utente = ?"
 	rows, err := db.Query(query, utente)
 	if err != nil {
 		return nil, err
@@ -296,8 +316,11 @@ func GetAllPasswords(db *sql.DB, utente string, chiave []byte) ([]map[string]str
 	var passwords []map[string]string
 	for rows.Next() {
 		var id int
+		var powned, clock sql.NullInt64
+		var otpCifrataBase64 sql.NullString
 		var url, user, passCifrataBase64 string
-		if err := rows.Scan(&id, &url, &user, &passCifrataBase64); err != nil {
+
+		if err := rows.Scan(&id, &url, &user, &passCifrataBase64, &powned, &clock, &otpCifrataBase64); err != nil {
 			continue
 		}
 
@@ -305,6 +328,29 @@ func GetAllPasswords(db *sql.DB, utente string, chiave []byte) ([]map[string]str
 		passDecifrata, err := DecifraturaPassword(passCifrata, chiave)
 		if err != nil {
 			continue
+		}
+
+		pownedVal := "0"
+		if powned.Valid {
+			pownedVal = fmt.Sprintf("%d", powned.Int64)
+		}
+
+		clockVal := ""
+		if clock.Valid {
+			clockVal = fmt.Sprintf("%d", clock.Int64)
+		}
+
+		otpSecret := ""
+		if otpCifrataBase64.Valid && otpCifrataBase64.String != "" {
+			otpCifrata, err := base64.StdEncoding.DecodeString(otpCifrataBase64.String)
+			if err != nil {
+				return nil, fmt.Errorf("errore nella decodifica del secret OTP per la password %d", id)
+			}
+			otpDecifrato, err := DecifraturaPassword(otpCifrata, chiave)
+			if err != nil {
+				return nil, fmt.Errorf("errore nella decifratura del secret OTP per la password %d", id)
+			}
+			otpSecret = string(otpDecifrato)
 		}
 
 		passwords = append(passwords, map[string]string{
@@ -312,40 +358,54 @@ func GetAllPasswords(db *sql.DB, utente string, chiave []byte) ([]map[string]str
 			"url":      url,
 			"username": user,
 			"password": string(passDecifrata),
+			"otpSecret": otpSecret,
+			"powned":   pownedVal,
+			"clock":    clockVal,
 		})
 	}
 
 	return passwords, nil
 }
 
-func GetPassword(db *sql.DB, indirizzo_url string, chiave []byte) error {
-	query := "SELECT id, utente, username, password_cifrata FROM PASSWORD WHERE indirizzo_url = ?"
-	rows, err := db.Query(query, indirizzo_url)
+func UpdatePowned(db *sql.DB, id string, utente string, powned string, clock string) error {
+	query := "UPDATE PASSWORD SET powned = ?, clock = ? WHERE id = ? AND utente = ?"
+
+	_, err := db.Exec(query, powned, clock, id, utente)
 	if err != nil {
 		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-
-		var id int
-		var utente, user, passCifrataBase64 string
-		rows.Scan(&id, &utente, &user, &passCifrataBase64)
-
-		// Decodifica Base64
-		passCifrata, _ := base64.StdEncoding.DecodeString(passCifrataBase64)
-
-		// Decifra
-		passDecifrata, err := DecifraturaPassword(passCifrata, chiave)
-		if err != nil {
-			fmt.Println("Errore decifratura:", err)
-			continue
-		}
-
-		fmt.Printf("ID: %d \n Utente: %s \n URL: %s \n User: %s 	|	Pass: %s \n", id, utente, indirizzo_url, user, string(passDecifrata))
 	}
 
 	return nil
 }
+
+//func GetPassword(db *sql.DB, indirizzo_url string, chiave []byte) error {
+//	query := "SELECT id, utente, username, password_cifrata FROM PASSWORD WHERE indirizzo_url = ?"
+//	rows, err := db.Query(query, indirizzo_url)
+//	if err != nil {
+//		return err
+//	}
+//	defer rows.Close()
+//
+//	for rows.Next() {
+//
+//		var id int
+//		var utente, user, passCifrataBase64 string
+//		rows.Scan(&id, &utente, &user, &passCifrataBase64)
+//
+//		// Decodifica Base64
+//		passCifrata, _ := base64.StdEncoding.DecodeString(passCifrataBase64)
+//
+//		// Decifra
+//		passDecifrata, err := DecifraturaPassword(passCifrata, chiave)
+//		if err != nil {
+//			fmt.Println("Errore decifratura:", err)
+//			continue
+//		}
+//
+//		fmt.Printf("ID: %d \n Utente: %s \n URL: %s \n User: %s 	|	Pass: %s \n", id, utente, indirizzo_url, user, string(passDecifrata))
+//	}
+//
+//	return nil
+//}
 
 // ----------------------------------------------------------------------------------------------------------
