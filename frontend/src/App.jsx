@@ -3,11 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './components/Login'
 import Register from './components/Register'
 import Dashboard from './components/Dashboard'
-import Cookies from 'js-cookie';
-
-
-
-
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -41,13 +36,18 @@ function App() {
 
   if (loading) return <div>Loading...</div>
 
-  const handleLogin = (token) => {
-    Cookies.set('session_token', token, { expires: 7, secure: false, sameSite: 'strict' });
+  const handleLogin = () => {
     setIsAuthenticated(true);
   }
 
-  const handleLogout = () => {
-    Cookies.remove('session_token');
+  const handleLogout = async () => {
+    const response = await fetch('http://localhost:8080/api/logout', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    if (!response.ok) {
+      throw new Error('Failed to logout');
+    }
     setIsAuthenticated(false);
   }
 

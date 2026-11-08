@@ -35,7 +35,7 @@ function Login({ onLogin }) {
       const data = await response.json()
 
       if (response.ok) {
-        onLogin(data.session_token || 'logged in')
+        onLogin()
         navigate('/')
       } else {
         setError(data.message || 'Login failed. Please try again.')

@@ -354,13 +354,13 @@ func GetAllPasswords(db *sql.DB, utente string, chiave []byte) ([]map[string]str
 		}
 
 		passwords = append(passwords, map[string]string{
-			"id":       fmt.Sprintf("%d", id),
-			"url":      url,
-			"username": user,
-			"password": string(passDecifrata),
+			"id":        fmt.Sprintf("%d", id),
+			"url":       url,
+			"username":  user,
+			"password":  string(passDecifrata),
 			"otpSecret": otpSecret,
-			"powned":   pownedVal,
-			"clock":    clockVal,
+			"powned":    pownedVal,
+			"clock":     clockVal,
 		})
 	}
 
@@ -377,35 +377,3 @@ func UpdatePowned(db *sql.DB, id string, utente string, powned string, clock str
 
 	return nil
 }
-
-//func GetPassword(db *sql.DB, indirizzo_url string, chiave []byte) error {
-//	query := "SELECT id, utente, username, password_cifrata FROM PASSWORD WHERE indirizzo_url = ?"
-//	rows, err := db.Query(query, indirizzo_url)
-//	if err != nil {
-//		return err
-//	}
-//	defer rows.Close()
-//
-//	for rows.Next() {
-//
-//		var id int
-//		var utente, user, passCifrataBase64 string
-//		rows.Scan(&id, &utente, &user, &passCifrataBase64)
-//
-//		// Decodifica Base64
-//		passCifrata, _ := base64.StdEncoding.DecodeString(passCifrataBase64)
-//
-//		// Decifra
-//		passDecifrata, err := DecifraturaPassword(passCifrata, chiave)
-//		if err != nil {
-//			fmt.Println("Errore decifratura:", err)
-//			continue
-//		}
-//
-//		fmt.Printf("ID: %d \n Utente: %s \n URL: %s \n User: %s 	|	Pass: %s \n", id, utente, indirizzo_url, user, string(passDecifrata))
-//	}
-//
-//	return nil
-//}
-
-// ----------------------------------------------------------------------------------------------------------

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import './Dashboard.css'
-import Cookies from 'js-cookie';
 
 const generateTotpCode = async (secret, timestamp) => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
@@ -102,7 +101,6 @@ function Dashboard({ onLogout }) {
   }, [passwords])
 
   const getAuthHeaders = () => {
-    const token = Cookies.get('session_token')
     return {
       'Content-Type': 'application/json',
     }
@@ -297,6 +295,14 @@ function Dashboard({ onLogout }) {
     setTimeout(() => setToast(null), 3000)
   }
 
+  const handleLogout = async () => {
+    try {
+      await onLogout()
+    } catch {
+      showToast('Failed to logout. Please try again.', 'error')
+    }
+  }
+
   const filteredPasswords = passwords.filter(p => 
     p.url?.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -305,7 +311,7 @@ function Dashboard({ onLogout }) {
     <div className="dashboard">
       <header className="dashboard-header">
         <h1>🔐 Password Manager</h1>
-        <button className="logout-btn" onClick={onLogout}>Logout</button>
+        <button className="logout-btn" onClick={handleLogout}>Logout</button>
       </header>
 
       <main className="dashboard-content">

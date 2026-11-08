@@ -157,6 +157,41 @@ func HandleCheckAuth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func HandleLogout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST, OPTIONS")
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if cookie, err := r.Cookie("session_token"); err == nil {
+		sessionMu.Lock()
+		delete(userSessions, cookie.Value)
+		sessionMu.Unlock()
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(1, 0),
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func LoginHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	// 1. Enable CORS
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost")
@@ -197,7 +232,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 		sessionMu.Unlock() // Sblocca
 
-		// 4. Send the sessionID to React in a cookie or JSON
+		// Keep the session ID in the HttpOnly cookie; do not expose it to JavaScript.
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session_token",
 			Value:    sessionID,
@@ -207,7 +242,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 			SameSite: http.SameSiteLaxMode,
 		})
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "logged in", "session_token": sessionID})
+		json.NewEncoder(w).Encode(map[string]string{"status": "logged in"})
 		return
 	}
 
@@ -465,6 +500,10 @@ func main() {
 
 	http.HandleFunc("/api/check-auth", func(w http.ResponseWriter, r *http.Request) {
 		HandleCheckAuth(w, r)
+	})
+
+	http.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {
+		HandleLogout(w, r)
 	})
 
 	http.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
